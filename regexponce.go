@@ -21,6 +21,12 @@ var Analyzer = &analysis.Analyzer{
 }
 
 func run(pass *analysis.Pass) (interface{}, error) {
+	// 関数の呼び出し箇所を取得する
+	// regexpの該当の関数だけを抽出する
+	// どのスコープで使われているか判定する。
+	// initかパッケージ変数の初期化の場合は許可する
+	// コメントで許可されているところは無視する。
+
 	inspect := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 
 	nodeFilter := []ast.Node{
@@ -38,4 +44,3 @@ func run(pass *analysis.Pass) (interface{}, error) {
 
 	return nil, nil
 }
-
