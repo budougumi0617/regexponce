@@ -1,8 +1,8 @@
 package regexponce
 
 import (
+	"go/importer"
 	"go/types"
-	"strings"
 
 	"github.com/gostaticanalysis/analysisutil"
 	"github.com/gostaticanalysis/comment/passes/commentmap"
@@ -29,9 +29,9 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	// どのスコープで使われているか判定する。
 	// initかパッケージ変数の初期化の場合は許可する
 	// コメントで許可されているところは無視する。
-	fs := restrictedFuncs(pass)
-	if len(fs) == 0 {
-		return nil, nil
+	fs, err := targetFuncs()
+	if err != nil {
+		panic(err)
 	}
 
 	pass.Report = analysisutil.ReportWithoutIgnore(pass)
@@ -52,43 +52,24 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	return nil, nil
 }
 
-func restrictedFuncs(pass *analysis.Pass) []*types.Func {
-	names := "hoge"
-	var fs []*types.Func
-	for _, fn := range strings.Split(names, ",") {
-		ss := strings.Split(strings.TrimSpace(fn), ".")
+func targetFuncs() ([]*types.Func, error) {
+	fs := make([]*types.Func, 0, 4)
+	fns := []string{"MustCompile", "Compile", "MustCompilePOSIX", "CompilePOSIX"}
+	pkg, err := importer.Default().Import("regexp")
+	if err != nil {
+		return nil, err
+	}
+	scp := pkg.Scope()
 
-		// package function: pkgname.Func
-		if len(ss) < 2 {
+	for _, fn := range fns {
+		obj := scp.Lookup(fn)
+		if obj == nil {
 			continue
 		}
-		f, _ := analysisutil.ObjectOf(pass, ss[0], ss[1]).(*types.Func)
-		if f != nil {
+		if f, ok := obj.(*types.Func); ok {
 			fs = append(fs, f)
-			continue
-		}
-
-		// method: (*pkgname.Type).Method
-		if len(ss) < 3 {
-			continue
-		}
-		pkgname := strings.TrimLeft(ss[0], "(")
-		typename := strings.TrimRight(ss[1], ")")
-		if pkgname != "" && pkgname[0] == '*' {
-			pkgname = pkgname[1:]
-			typename = "*" + typename
-		}
-
-		typ := analysisutil.TypeOf(pass, pkgname, typename)
-		if typ == nil {
-			continue
-		}
-
-		m := analysisutil.MethodOf(typ, ss[2])
-		if m != nil {
-			fs = append(fs, m)
 		}
 	}
 
-	return fs
+	return fs, nil
 }
