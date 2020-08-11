@@ -1,11 +1,13 @@
 package regexponce
 
 import (
-	"go/ast"
+	"go/types"
+	"strings"
 
+	"github.com/gostaticanalysis/analysisutil"
+	"github.com/gostaticanalysis/comment/passes/commentmap"
 	"golang.org/x/tools/go/analysis"
-	"golang.org/x/tools/go/analysis/passes/inspect"
-	"golang.org/x/tools/go/ast/inspector"
+	"golang.org/x/tools/go/analysis/passes/buildssa"
 )
 
 const doc = "regexponce is ..."
@@ -16,7 +18,8 @@ var Analyzer = &analysis.Analyzer{
 	Doc:  doc,
 	Run:  run,
 	Requires: []*analysis.Analyzer{
-		inspect.Analyzer,
+		buildssa.Analyzer,
+		commentmap.Analyzer,
 	},
 }
 
@@ -26,21 +29,66 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	// どのスコープで使われているか判定する。
 	// initかパッケージ変数の初期化の場合は許可する
 	// コメントで許可されているところは無視する。
-
-	inspect := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
-
-	nodeFilter := []ast.Node{
-		(*ast.Ident)(nil),
+	fs := restrictedFuncs(pass)
+	if len(fs) == 0 {
+		return nil, nil
 	}
 
-	inspect.Preorder(nodeFilter, func(n ast.Node) {
-		switch n := n.(type) {
-		case *ast.Ident:
-			if n.Name == "gopher" {
-				pass.Reportf(n.Pos(), "identifier is gopher")
+	pass.Report = analysisutil.ReportWithoutIgnore(pass)
+	srcFuncs := pass.ResultOf[buildssa.Analyzer].(*buildssa.SSA).SrcFuncs
+	for _, sf := range srcFuncs {
+		for _, b := range sf.Blocks {
+			for _, instr := range b.Instrs {
+				for _, f := range fs {
+					if analysisutil.Called(instr, nil, f) {
+						pass.Reportf(instr.Pos(), "%s must not be called", f.FullName())
+						break
+					}
+				}
 			}
 		}
-	})
+	}
 
 	return nil, nil
+}
+
+func restrictedFuncs(pass *analysis.Pass) []*types.Func {
+	names := "hoge"
+	var fs []*types.Func
+	for _, fn := range strings.Split(names, ",") {
+		ss := strings.Split(strings.TrimSpace(fn), ".")
+
+		// package function: pkgname.Func
+		if len(ss) < 2 {
+			continue
+		}
+		f, _ := analysisutil.ObjectOf(pass, ss[0], ss[1]).(*types.Func)
+		if f != nil {
+			fs = append(fs, f)
+			continue
+		}
+
+		// method: (*pkgname.Type).Method
+		if len(ss) < 3 {
+			continue
+		}
+		pkgname := strings.TrimLeft(ss[0], "(")
+		typename := strings.TrimRight(ss[1], ")")
+		if pkgname != "" && pkgname[0] == '*' {
+			pkgname = pkgname[1:]
+			typename = "*" + typename
+		}
+
+		typ := analysisutil.TypeOf(pass, pkgname, typename)
+		if typ == nil {
+			continue
+		}
+
+		m := analysisutil.MethodOf(typ, ss[2])
+		if m != nil {
+			fs = append(fs, m)
+		}
+	}
+
+	return fs
 }
