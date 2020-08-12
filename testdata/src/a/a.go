@@ -14,9 +14,11 @@ func init() {
 
 func f() {
 	// The pattern can be written in regular expression.
-	var validID = regexp.MustCompile(`^[a-z]+\[[0-9]+\]$`) // want `regexp\.MustCompile must be called  only once at initialize`
+	var validID = regexp.MustCompile(`^[a-z]+\[[0-9]+\]$`) // want `regexp.MustCompile must be called only once at initialize`
 	fmt.Println(validID.MatchString("adam[23]"))
 
-	// lint:ignore regexp allowed
+	// lint:ignore regexponce allowed
 	validID = regexp.MustCompile(`^[a-z]+\[[0-9]+\]$`) // OK
+	hoge := regexp.MustCompile
+	hoge(`^[a-z]+\[[0-9]+\]$`) // want `regexp.MustCompile must be called only once at initialize`
 }
