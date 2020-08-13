@@ -1,5 +1,9 @@
 package regexponce
 
-import "go/types"
+import (
+	"go/types"
 
-var TargetFuncs func() ([]*types.Func, error) = targetFuncs
+	"golang.org/x/tools/go/analysis"
+)
+
+var TargetFuncs func(*analysis.Pass) []*types.Func = targetFuncs

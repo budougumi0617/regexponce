@@ -1,8 +1,6 @@
 package regexponce
 
 import (
-	"fmt"
-	"go/importer"
 	"go/types"
 	"strings"
 
@@ -27,60 +25,25 @@ var Analyzer = &analysis.Analyzer{
 }
 
 func run(pass *analysis.Pass) (interface{}, error) {
-	fo := analysisutil.ObjectOf(pass, "regexp", "MustCompile")
-	f := fo.(*types.Func)
-
-	f2 := fromDefault()
-	fmt.Println("Pkg", f.Pkg(), "-------", f2.Pkg())
-	fmt.Println("Name", f.FullName(), "-------", f2.FullName())
-	fmt.Println("Id", f.Id(), "-------", f2.Id())
-	fmt.Println("Pos", f.Pos(), "-------", f2.Pos())
-	fmt.Println("Scope", f.Scope(), "-------", f2.Scope())
-	return nil, nil
-}
-
-func fromDefault() *types.Func {
-	pkg, err := importer.Default().Import("regexp")
-	if err != nil {
-		panic(err) // !!!!!!!! can't find import: "regexp" on playgournd
-	}
-	obj := pkg.Scope().Lookup("MustCompile")
-	if f, ok := obj.(*types.Func); ok {
-		return f
-	}
-	panic("unreachable")
-}
-
-func run2(pass *analysis.Pass) (interface{}, error) {
 	// 関数の呼び出し箇所を取得する
 	// regexpの該当の関数だけを抽出する
 	// どのスコープで使われているか判定する。
 	// initかパッケージ変数の初期化の場合は許可する
 	// コメントで許可されているところは無視する。
-	fs, err := targetFuncs()
-	if err != nil {
-		panic(err)
-	}
-	fs2 := restrictedFuncs(pass, "regexp.MustCompile")
-	fs3 := analysisutil.ObjectOf(pass, "regexp", "MustCompile")
-	fmt.Printf("fs: %#v\n", fs[0])
-	fmt.Printf("fs2: %#v\n", fs2[0])
-	fmt.Printf("fs2: %#v\n", fs3)
-	fmt.Printf("result: %t\n", fs2[0] == fs[0])
+	fs := targetFuncs(pass)
 
 	pass.Report = analysisutil.ReportWithoutIgnore(pass)
 	srcFuncs := pass.ResultOf[buildssa.Analyzer].(*buildssa.SSA).SrcFuncs
 	for _, sf := range srcFuncs {
+		if strings.HasPrefix(sf.Name(), "init#") {
+			continue
+		}
 		for _, b := range sf.Blocks {
 			for _, instr := range b.Instrs {
-				// 	fmt.Printf("instr %#v\n", instr)
 				for _, f := range fs {
-					// for _, f := range fs2 {
-					// for _, f := range []*types.Func{fs3.(*types.Func)} {
 					//fmt.Println("try!", f.FullName())
-					if Func(instr, nil, f) {
-						fmt.Println("found!!!")
-						fmt.Printf("%d: %s must be called only once at initialize\n", instr.Pos(), f.FullName())
+					if Func(instr, f) {
+						//fmt.Printf("%d: %s must be called only once at initialize\n", instr.Pos(), f.FullName())
 						pass.Reportf(instr.Pos(), "%s must be called only once at initialize", f.FullName())
 						break
 					}
@@ -133,7 +96,7 @@ func restrictedFuncs(pass *analysis.Pass, names string) []*types.Func {
 
 // Func returns true when f is called in the instr.
 // If recv is not nil, Called also checks the receiver.
-func Func(instr ssa.Instruction, recv ssa.Value, f *types.Func) bool {
+func Func(instr ssa.Instruction, f *types.Func) bool {
 
 	// fmt.Println("Func start!!")
 	call, ok := instr.(ssa.CallInstruction)
@@ -158,21 +121,8 @@ func Func(instr ssa.Instruction, recv ssa.Value, f *types.Func) bool {
 	}
 	// fmt.Println("got fn!", fn.FullName())
 
-	if recv != nil &&
-		common.Signature().Recv() != nil &&
-		(len(common.Args) == 0 && recv != nil || common.Args[0] != recv &&
-			!referrer(recv, common.Args[0])) {
-		return false
-	}
-	// fmt.Println("convert", fn.FullName(), "and", f.FullName())
-	// fmt.Println("Scope", fn.Scope(), "Scope", f.Scope())
-	// fmt.Println("Parent", fn.Parent(), "-------", f.Parent())
-	fmt.Println("Pkg", fn.Pkg(), "-------", f.Pkg())
-	fmt.Println("Pos", fn.Pos(), "-------", f.Pos())
-	fmt.Println("==", fn.Pkg().Path() == f.Pkg().Path())
-	// if d := cmp.Diff(fn, f); len(d) != 0 {
-	// 	fmt.Printf("differs: (-got +want)\n%s", d)
-	// }
+	//fmt.Println("Pos", fn.Pos(), "-------", f.Pos())
+	//fmt.Println("==", fn.Pkg().Path() == f.Pkg().Path())
 
 	return fn == f
 }
@@ -201,18 +151,11 @@ func isReferrerOf(a, b ssa.Value) bool {
 	return false
 }
 
-func targetFuncs() ([]*types.Func, error) {
+func targetFuncs(pass *analysis.Pass) []*types.Func {
 	fs := make([]*types.Func, 0, 4)
-	// fns := []string{"MustCompile", "Compile", "MustCompilePOSIX", "CompilePOSIX"}
-	fns := []string{"MustCompile"}
-	pkg, err := importer.Default().Import("regexp")
-	if err != nil {
-		return nil, err
-	}
-	scp := pkg.Scope()
-
+	fns := []string{"MustCompile", "Compile", "MustCompilePOSIX", "CompilePOSIX"}
 	for _, fn := range fns {
-		obj := scp.Lookup(fn)
+		obj := analysisutil.ObjectOf(pass, "regexp", fn)
 		if obj == nil {
 			continue
 		}
@@ -221,5 +164,5 @@ func targetFuncs() ([]*types.Func, error) {
 		}
 	}
 
-	return fs, nil
+	return fs
 }
