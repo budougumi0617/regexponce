@@ -11,7 +11,13 @@ import (
 	"golang.org/x/tools/go/ssa"
 )
 
-const doc = "regexponce is ..."
+const doc = `regexp.Compile and below functions should be called at once for performance.
+- regexp.MustCompile
+- regexp.CompilePOSIX
+- regexp.MustCompilePOSIX
+
+Allow call in init, and main(exept for in for loop) functions because each function is called only once.
+`
 
 // Analyzer is ...
 var Analyzer = &analysis.Analyzer{
