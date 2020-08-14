@@ -31,12 +31,10 @@ var Analyzer = &analysis.Analyzer{
 }
 
 func run(pass *analysis.Pass) (interface{}, error) {
-	// 関数の呼び出し箇所を取得する
-	// regexpの該当の関数だけを抽出する
-	// どのスコープで使われているか判定する。
-	// initかパッケージ変数の初期化の場合は許可する
-	// コメントで許可されているところは無視する。
 	fs := targetFuncs(pass)
+	if len(fs) == 0 {
+		return nil, nil
+	}
 
 	pass.Report = analysisutil.ReportWithoutIgnore(pass)
 	srcFuncs := pass.ResultOf[buildssa.Analyzer].(*buildssa.SSA).SrcFuncs
@@ -159,14 +157,22 @@ func isReferrerOf(a, b ssa.Value) bool {
 
 func targetFuncs(pass *analysis.Pass) []*types.Func {
 	fs := make([]*types.Func, 0, 4)
+	path := "regexp"
 	fns := []string{"MustCompile", "Compile", "MustCompilePOSIX", "CompilePOSIX"}
-	for _, fn := range fns {
-		obj := analysisutil.ObjectOf(pass, "regexp", fn)
-		if obj == nil {
-			continue
-		}
-		if f, ok := obj.(*types.Func); ok {
-			fs = append(fs, f)
+
+	imports := pass.Pkg.Imports()
+	for i := range imports {
+		if path == analysisutil.RemoveVendor(imports[i].Path()) {
+			for _, fn := range fns {
+				obj := imports[i].Scope().Lookup(fn)
+				if obj == nil {
+					continue
+				}
+
+				if f, ok := obj.(*types.Func); ok {
+					fs = append(fs, f)
+				}
+			}
 		}
 	}
 
