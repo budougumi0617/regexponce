@@ -58,57 +58,15 @@ func run(pass *analysis.Pass) (interface{}, error) {
 
 	return nil, nil
 }
-func restrictedFuncs(pass *analysis.Pass, names string) []*types.Func {
-	var fs []*types.Func
-	for _, fn := range strings.Split(names, ",") {
-		ss := strings.Split(strings.TrimSpace(fn), ".")
-
-		// package function: pkgname.Func
-		if len(ss) < 2 {
-			continue
-		}
-		f, _ := analysisutil.ObjectOf(pass, ss[0], ss[1]).(*types.Func)
-		if f != nil {
-			fs = append(fs, f)
-			continue
-		}
-
-		// method: (*pkgname.Type).Method
-		if len(ss) < 3 {
-			continue
-		}
-		pkgname := strings.TrimLeft(ss[0], "(")
-		typename := strings.TrimRight(ss[1], ")")
-		if pkgname != "" && pkgname[0] == '*' {
-			pkgname = pkgname[1:]
-			typename = "*" + typename
-		}
-
-		typ := analysisutil.TypeOf(pass, pkgname, typename)
-		if typ == nil {
-			continue
-		}
-
-		m := analysisutil.MethodOf(typ, ss[2])
-		if m != nil {
-			fs = append(fs, m)
-		}
-	}
-
-	return fs
-}
 
 // Func returns true when f is called in the instr.
 // If recv is not nil, Called also checks the receiver.
 func Func(instr ssa.Instruction, f *types.Func) bool {
-
-	// fmt.Println("Func start!!")
 	call, ok := instr.(ssa.CallInstruction)
 	if !ok {
 		return false
 	}
 
-	// fmt.Println("CalleInstruction")
 	common := call.Common()
 	if common == nil {
 		return false
@@ -123,36 +81,11 @@ func Func(instr ssa.Instruction, f *types.Func) bool {
 	if !ok {
 		return false
 	}
-	// fmt.Println("got fn!", fn.FullName())
 
-	//fmt.Println("Pos", fn.Pos(), "-------", f.Pos())
-	//fmt.Println("==", fn.Pkg().Path() == f.Pkg().Path())
+	// main関数の中だったらOK
+	// main関数の中でもforループの中だったら要確認。
 
 	return fn == f
-}
-
-func referrer(a, b ssa.Value) bool {
-	return isReferrerOf(a, b) || isReferrerOf(b, a)
-}
-
-func isReferrerOf(a, b ssa.Value) bool {
-	if a == nil || b == nil {
-		return false
-	}
-	if b.Referrers() != nil {
-		brs := *b.Referrers()
-
-		for _, br := range brs {
-			brv, ok := br.(ssa.Value)
-			if !ok {
-				continue
-			}
-			if brv == a {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func targetFuncs(pass *analysis.Pass) []*types.Func {
