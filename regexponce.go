@@ -42,12 +42,21 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		if strings.HasPrefix(sf.Name(), "init#") {
 			continue
 		}
+
 		for _, b := range sf.Blocks {
+			var skipped bool
+			if strings.HasPrefix(sf.Name(), "main") {
+				skipped = true
+			}
+			if skipped && b.Comment == "for.body" {
+				skipped = false
+			}
+			if skipped {
+				continue
+			}
 			for _, instr := range b.Instrs {
 				for _, f := range fs {
-					//fmt.Println("try!", f.FullName())
 					if Func(instr, f) {
-						//fmt.Printf("%d: %s must be called only once at initialize\n", instr.Pos(), f.FullName())
 						pass.Reportf(instr.Pos(), "%s must be called only once at initialize", f.FullName())
 						break
 					}
@@ -81,9 +90,6 @@ func Func(instr ssa.Instruction, f *types.Func) bool {
 	if !ok {
 		return false
 	}
-
-	// main関数の中だったらOK
-	// main関数の中でもforループの中だったら要確認。
 
 	return fn == f
 }
