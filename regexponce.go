@@ -11,15 +11,16 @@ import (
 	"golang.org/x/tools/go/ssa"
 )
 
-const doc = `regexp.Compile and below functions should be called at once for performance.
+const doc = `Below functions should be called at once for performance.
+- regexp.Compile
 - regexp.MustCompile
 - regexp.CompilePOSIX
 - regexp.MustCompilePOSIX
 
-Allow call in init, and main(exept for in for loop) functions because each function is called only once.
+Allow call in init, and main(except for in for loop) functions because each function is called only once.
 `
 
-// Analyzer is ...
+// Analyzer is check correct call of regexp package.
 var Analyzer = &analysis.Analyzer{
 	Name: "regexponce",
 	Doc:  doc,
@@ -38,6 +39,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 
 	pass.Report = analysisutil.ReportWithoutIgnore(pass)
 	srcFuncs := pass.ResultOf[buildssa.Analyzer].(*buildssa.SSA).SrcFuncs
+
 	for _, sf := range srcFuncs {
 		if strings.HasPrefix(sf.Name(), "init#") {
 			continue
@@ -48,12 +50,15 @@ func run(pass *analysis.Pass) (interface{}, error) {
 			if strings.HasPrefix(sf.Name(), "main") {
 				skipped = true
 			}
+
 			if skipped && inFor(b) {
 				skipped = false
 			}
+
 			if skipped {
 				continue
 			}
+
 			for _, instr := range b.Instrs {
 				for _, f := range fs {
 					if analysisutil.Called(instr, nil, f) {
@@ -70,15 +75,18 @@ func run(pass *analysis.Pass) (interface{}, error) {
 
 func inFor(b *ssa.BasicBlock) bool {
 	p := b
+
 	for {
 		if p.Comment == "for.body" {
 			return true
 		}
+
 		p = p.Idom()
 		if p == nil {
 			break
 		}
 	}
+
 	return false
 }
 
