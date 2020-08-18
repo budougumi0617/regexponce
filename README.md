@@ -35,31 +35,54 @@ Analyzer confirms that the below functions are not called multiple times.
 - [regexp.MustCompile](https://golang.org/pkg/regexp/#MustCompile)
 - [regexp.MustCompilePOSIX](https://golang.org/pkg/regexp/#MustCompilePOSIX)
 ### Allow condition
-- Target functions are called in the package scope.
-- Target functions are called in `init` function.
-- Target functions are called in `main` function.
+- Called target functions in the package scope.
+- Called target functions in `init` function.
+- Called target functions in `main` function.
   - Except if they are called in `for` loop.
 - Add [staticcheck's style comments](https://staticcheck.io/docs/#ignoring-problems)
   - `//lint:ignore regexponce REASON`
 ### Error condition
-- Target functions are called in normal function.
-- Target functions are called in for loop.
+- Called target functions in normal function.
+- Called target functions in for lop.
 
 The warning sample is below.
 
 ```go
+package main
+
+import (
+    "fmt"
+    "regexp"
+)
+
+func f() {
+	var validID = regexp.MustCompile(`^[a-z]+\[[0-9]+\]$`) // want `regexp.MustCompile must be called only once at initialize`
+	// lint:ignore regexponce allowed
+	validID = regexp.MustCompile(`^[a-z]+\[[0-9]+\]$`) // OK because add specify comment.
+
+	assign := regexp.MustCompile
+	assign(`^[a-z]+\[[0-9]+\]$`) // want `regexp.MustCompile must be called only once at initialize`
+}
+
+func main() {
+	var validID = regexp.MustCompile(`^[a-z]+\[[0-9]+\]$`) // OK because main function runs only once.
+
+	for i := 0; i < 10; i++ {
+		validID = regexp.MustCompile(`^[a-z]+\[[0-9]+\]$`) // want `regexp.MustCompile must be called only once at initialize`
+	}
+}
 ```
 
 ## Description
 ```bash
 $ regexponce help regexponce
-go run ./cmd/regexponce help regexponce
-regexponce: regexp.Compile and below functions should be called at once for performance.
+regexponce: Below functions should be called at once for performance.
+- regexp.Compile
 - regexp.MustCompile
 - regexp.CompilePOSIX
 - regexp.MustCompilePOSIX
 
-Allow call in init, and main(exept for in for loop) functions because each function is called only once.
+Allow call in init, and main(except for in for loop) functions because each function is called only once.
 ```
 
 ## Contribution
