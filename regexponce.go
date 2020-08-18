@@ -56,7 +56,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 			}
 			for _, instr := range b.Instrs {
 				for _, f := range fs {
-					if Func(instr, f) {
+					if analysisutil.Called(instr, nil, f) {
 						pass.Reportf(instr.Pos(), "%s must be called only once at initialize", f.FullName())
 						break
 					}
@@ -80,32 +80,6 @@ func inFor(b *ssa.BasicBlock) bool {
 		}
 	}
 	return false
-}
-
-// Func returns true when f is called in the instr.
-// If recv is not nil, Called also checks the receiver.
-func Func(instr ssa.Instruction, f *types.Func) bool {
-	call, ok := instr.(ssa.CallInstruction)
-	if !ok {
-		return false
-	}
-
-	common := call.Common()
-	if common == nil {
-		return false
-	}
-
-	callee := common.StaticCallee()
-	if callee == nil {
-		return false
-	}
-
-	fn, ok := callee.Object().(*types.Func)
-	if !ok {
-		return false
-	}
-
-	return fn == f
 }
 
 func targetFuncs(pass *analysis.Pass) []*types.Func {
