@@ -48,7 +48,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 			if strings.HasPrefix(sf.Name(), "main") {
 				skipped = true
 			}
-			if skipped && b.Comment == "for.body" {
+			if skipped && inFor(b) {
 				skipped = false
 			}
 			if skipped {
@@ -66,6 +66,20 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	}
 
 	return nil, nil
+}
+
+func inFor(b *ssa.BasicBlock) bool {
+	p := b
+	for {
+		if p.Comment == "for.body" {
+			return true
+		}
+		p = p.Idom()
+		if p == nil {
+			break
+		}
+	}
+	return false
 }
 
 // Func returns true when f is called in the instr.
