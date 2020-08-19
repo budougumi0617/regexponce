@@ -5,7 +5,7 @@ regexponce
 [![CircleCI](https://circleci.com/gh/budougumi0617/regexponce.svg?style=svg)](https://circleci.com/gh/budougumi0617/regexponce)
 
 
-[godoc]:https://godoc.org/github.com/budougumi0617/regexponce
+[godoc]:https://pkg.go.dev/github.com/budougumi0617/regexponce
 
 `regexp.{Must}Compile{POSIX}` should be called at once for performance.
 
