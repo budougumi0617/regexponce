@@ -1,0 +1,30 @@
+version: 2.1
+orbs:
+  go: circleci/go@1.3.0 # https://circleci.com/orbs/registry/orb/circleci/go
+
+jobs:
+  build:
+    executor:
+      name: go/default # the base image is cimg/go
+      tag: '1.15'
+
+    environment:
+      TEST_RESULTS: /tmp/test-results
+
+    steps:
+      - checkout
+      - run: mkdir -p $TEST_RESULTS
+      - go/mod-download-cached
+
+      - run:
+          name: Run unit tests
+          command: |
+            gotestsum --junitfile ${TEST_RESULTS}/unit-tests.xml -- -p 6 -race -cover ./...
+      - run: go build ./...
+
+      - store_artifacts:
+          path: /tmp/test-results
+          destination: raw-test-output
+
+      - store_test_results:
+          path: /tmp/test-results
