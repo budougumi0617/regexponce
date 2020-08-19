@@ -33,4 +33,3 @@ func (analyzerPlugin) GetAnalyzers() []*analysis.Analyzer {
 		regexponce.Analyzer,
 	}
 }
-
