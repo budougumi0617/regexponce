@@ -27,6 +27,21 @@ func f() {
 	hoge(`^[a-z]+\[[0-9]+\]$`) // want `regexp.MustCompile must be called only once at initialize`
 }
 
+func doNotWarnWithVariable(input string) {
+	regexp.MustCompile(input) // OK because function parameter is a variable
+
+	returnWord := func(input string) string {
+		return input
+	}
+	regexp.MustCompile(returnWord(input)) // OK because function parameter is a function call
+
+	const constVal = ".*"
+	regexp.MustCompile(input + constVal) // OK because function parameter contains a variable
+
+	regexp.MustCompile(constVal)            // want `regexp.MustCompile must be called only once at initialize`
+	regexp.MustCompile(constVal + constVal) // want `regexp.MustCompile must be called only once at initialize`
+}
+
 func main() {
 	var validID = regexp.MustCompile(`^[a-z]+\[[0-9]+\]$`) // OK because main function runs only once.
 	fmt.Println(validID.MatchString("adam[23]"))
